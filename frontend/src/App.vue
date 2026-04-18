@@ -23,6 +23,8 @@
             v-if="selectedFolder"
             :folder-id="selectedFolder.id"
             :folder-name="selectedFolder.name"
+            :include-subfolders="includeSubfolders"
+            @update:include-subfolders="includeSubfolders = $event"
           />
           <div
             v-else
@@ -46,6 +48,7 @@ import ImageGrid from './components/ImageGrid.vue';
 
 const folders = ref([]);
 const selectedFolder = ref(null);
+const includeSubfolders = ref(false);
 
 onMounted(async () => {
   folders.value = await getFolders();

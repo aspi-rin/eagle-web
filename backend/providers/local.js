@@ -12,7 +12,30 @@ class LocalProvider {
     return JSON.parse(raw).folders;
   }
 
-  getImages(folderId) {
+  _collectFolderIds(folderId, folderList) {
+    const ids = new Set([folderId]);
+    const queue = [...folderList];
+    while (queue.length) {
+      const folder = queue.shift();
+      if (ids.has(folder.id)) {
+        for (const child of folder.children || []) {
+          queue.push(child);
+          ids.add(child.id);
+        }
+      } else if ((folder.children || []).length) {
+        queue.push(...folder.children);
+      }
+    }
+    return ids;
+  }
+
+  getImages(folderId, includeSubfolders = false) {
+    let folderIds;
+    if (includeSubfolders) {
+      const folders = this.getFolders();
+      folderIds = this._collectFolderIds(folderId, folders);
+    }
+
     const dirs = fs.readdirSync(this.imagesDir);
     const images = [];
 
@@ -22,7 +45,10 @@ class LocalProvider {
         const meta = JSON.parse(
           fs.readFileSync(path.join(this.imagesDir, dir, 'metadata.json'), 'utf-8')
         );
-        if (!meta.isDeleted && meta.folders.includes(folderId)) {
+        const inFolder = includeSubfolders
+          ? meta.folders.some((f) => folderIds.has(f))
+          : meta.folders.includes(folderId);
+        if (!meta.isDeleted && inFolder) {
           images.push({
             id: meta.id,
             name: meta.name,

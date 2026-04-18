@@ -1,6 +1,16 @@
 <template>
   <div class="p-5">
-    <h2 class="text-base font-semibold mb-4 text-gray-200">{{ folderName }}</h2>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-semibold text-gray-200">{{ folderName }}</h2>
+      <div class="flex items-center gap-2 text-sm text-gray-400">
+        <span>包含子文件夹</span>
+        <n-switch
+          :value="includeSubfolders"
+          size="small"
+          @update:value="$emit('update:includeSubfolders', $event)"
+        />
+      </div>
+    </div>
 
     <div v-if="loading" class="flex justify-center py-16">
       <n-spin size="large" />
@@ -30,7 +40,7 @@
 
 <script setup>
 import { ref, watch } from 'vue';
-import { NSpin } from 'naive-ui';
+import { NSpin, NSwitch } from 'naive-ui';
 import MasonryWall from '@yeger/vue-masonry-wall';
 import PhotoSwipe from 'photoswipe';
 import 'photoswipe/style.css';
@@ -39,20 +49,25 @@ import { getImages, thumbnailUrl, originalUrl } from '../api/index.js';
 const props = defineProps({
   folderId: { type: String, default: null },
   folderName: { type: String, default: '' },
+  includeSubfolders: { type: Boolean, default: false },
 });
+
+const emit = defineEmits(['update:includeSubfolders']);
 
 const images = ref([]);
 const loading = ref(false);
 
+async function loadImages() {
+  if (!props.folderId) return;
+  loading.value = true;
+  images.value = [];
+  images.value = await getImages(props.folderId, props.includeSubfolders);
+  loading.value = false;
+}
+
 watch(
-  () => props.folderId,
-  async (id) => {
-    if (!id) return;
-    loading.value = true;
-    images.value = [];
-    images.value = await getImages(id);
-    loading.value = false;
-  },
+  [() => props.folderId, () => props.includeSubfolders],
+  loadImages,
   { immediate: true }
 );
 

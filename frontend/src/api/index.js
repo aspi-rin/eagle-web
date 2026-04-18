@@ -6,8 +6,10 @@ export async function getFolders() {
   return res.json();
 }
 
-export async function getImages(folderId) {
-  const res = await fetch(`${BASE}/images?folderId=${encodeURIComponent(folderId)}`);
+export async function getImages(folderId, includeSubfolders = false) {
+  const params = new URLSearchParams({ folderId });
+  if (includeSubfolders) params.set('includeSubfolders', 'true');
+  const res = await fetch(`${BASE}/images?${params}`);
   if (!res.ok) throw new Error('Failed to fetch images');
   return res.json();
 }

@@ -19,10 +19,10 @@ app.get('/api/folders', (req, res) => {
 });
 
 app.get('/api/images', (req, res) => {
-  const { folderId } = req.query;
+  const { folderId, includeSubfolders } = req.query;
   if (!folderId) return res.status(400).json({ error: 'folderId required' });
   try {
-    res.json(provider.getImages(folderId));
+    res.json(provider.getImages(folderId, includeSubfolders === 'true'));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
