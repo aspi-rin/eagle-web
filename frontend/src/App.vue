@@ -18,7 +18,7 @@
         </n-layout-sider>
 
         <!-- Main content -->
-        <n-layout-content :native-scrollbar="false" style="background: #18181c">
+        <n-layout-content style="background: #18181c; overflow: hidden; position: relative">
           <ImageGrid
             v-if="selectedFolder"
             :folder-id="selectedFolder.id"
@@ -28,7 +28,8 @@
           />
           <div
             v-else
-            class="flex flex-col items-center justify-center h-full gap-3 text-gray-600"
+            class="flex flex-col items-center justify-center gap-3 text-gray-600"
+            style="flex: 1"
           >
             <span class="text-4xl">🦅</span>
             <span class="text-sm">选择左侧文件夹以浏览图片</span>

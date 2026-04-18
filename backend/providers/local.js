@@ -5,11 +5,41 @@ class LocalProvider {
   constructor(libraryPath) {
     this.libraryPath = libraryPath;
     this.imagesDir = path.join(libraryPath, 'images');
+    this._allImages = null; // populated once on first use
   }
 
   getFolders() {
     const raw = fs.readFileSync(path.join(this.libraryPath, 'metadata.json'), 'utf-8');
     return JSON.parse(raw).folders;
+  }
+
+  // Build full image index once; subsequent calls are in-memory only
+  _ensureCache() {
+    if (this._allImages) return;
+    console.log('[cache] building image index…');
+    const dirs = fs.readdirSync(this.imagesDir);
+    this._allImages = [];
+    for (const dir of dirs) {
+      if (!dir.endsWith('.info')) continue;
+      try {
+        const meta = JSON.parse(
+          fs.readFileSync(path.join(this.imagesDir, dir, 'metadata.json'), 'utf-8')
+        );
+        if (!meta.isDeleted) {
+          this._allImages.push({
+            id: meta.id,
+            name: meta.name,
+            ext: meta.ext,
+            width: meta.width,
+            height: meta.height,
+            tags: meta.tags,
+            btime: meta.btime,
+            folders: meta.folders,
+          });
+        }
+      } catch (_) {}
+    }
+    console.log(`[cache] indexed ${this._allImages.length} images`);
   }
 
   _collectFolderIds(folderId, folderList) {
@@ -30,39 +60,21 @@ class LocalProvider {
   }
 
   getImages(folderId, includeSubfolders = false) {
+    this._ensureCache();
+
     let folderIds;
     if (includeSubfolders) {
-      const folders = this.getFolders();
-      folderIds = this._collectFolderIds(folderId, folders);
+      folderIds = this._collectFolderIds(folderId, this.getFolders());
     }
 
-    const dirs = fs.readdirSync(this.imagesDir);
-    const images = [];
-
-    for (const dir of dirs) {
-      if (!dir.endsWith('.info')) continue;
-      try {
-        const meta = JSON.parse(
-          fs.readFileSync(path.join(this.imagesDir, dir, 'metadata.json'), 'utf-8')
-        );
-        const inFolder = includeSubfolders
-          ? meta.folders.some((f) => folderIds.has(f))
-          : meta.folders.includes(folderId);
-        if (!meta.isDeleted && inFolder) {
-          images.push({
-            id: meta.id,
-            name: meta.name,
-            ext: meta.ext,
-            width: meta.width,
-            height: meta.height,
-            tags: meta.tags,
-            btime: meta.btime,
-          });
-        }
-      } catch (_) {}
-    }
-
-    return images.sort((a, b) => b.btime - a.btime);
+    return this._allImages
+      .filter((img) => {
+        return includeSubfolders
+          ? img.folders.some((f) => folderIds.has(f))
+          : img.folders.includes(folderId);
+      })
+      .sort((a, b) => b.btime - a.btime)
+      .map(({ folders, ...rest }) => rest);
   }
 
   getMeta(id) {
@@ -70,7 +82,6 @@ class LocalProvider {
     return JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
   }
 
-  // pipeFile abstracts file delivery so future providers can swap in a stream
   pipeFile(id, type, res) {
     const meta = this.getMeta(id);
     const filename =
