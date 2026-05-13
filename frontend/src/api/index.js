@@ -21,3 +21,20 @@ export function thumbnailUrl(id) {
 export function originalUrl(id) {
   return `${BASE}/file/${id}/original`;
 }
+
+export async function getConfig() {
+  const res = await fetch(`${BASE}/config`);
+  if (!res.ok) throw new Error('Failed to fetch config');
+  return res.json();
+}
+
+export async function setLibraryPath(libraryPath) {
+  const res = await fetch(`${BASE}/config/library`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ libraryPath }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to update library path');
+  return data;
+}
