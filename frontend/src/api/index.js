@@ -28,6 +28,18 @@ export async function getConfig() {
   return res.json();
 }
 
+// Ask the backend to open a native folder-picker dialog on the server machine.
+// Returns the selected path string, or null if cancelled.
+export async function pickFolder() {
+  const res = await fetch(`${BASE}/config/pick-folder`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to open folder picker');
+  }
+  const data = await res.json();
+  return data.cancelled ? null : data.path;
+}
+
 export async function setLibraryPath(libraryPath) {
   const res = await fetch(`${BASE}/config/library`, {
     method: 'POST',

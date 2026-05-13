@@ -2,8 +2,29 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
 const cfg = require('./config');
 const LocalProvider = require('./providers/local');
+
+// Open a native OS folder-picker dialog on the server machine.
+// Returns the selected path, or an empty string if cancelled.
+function pickFolderDialog() {
+  return new Promise((resolve, reject) => {
+    const cmd = [
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+      'Add-Type -AssemblyName System.Windows.Forms',
+      '$d = New-Object System.Windows.Forms.FolderBrowserDialog',
+      "$d.Description = 'Select Eagle Library Folder (.library)'",
+      "$d.ShowNewFolderButton = $false",
+      "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath }",
+    ].join('; ');
+
+    execFile('powershell', ['-NoProfile', '-Command', cmd], { encoding: 'buffer' }, (err, stdout) => {
+      if (err) return reject(new Error(err.message));
+      resolve(stdout.toString('utf8').trim());
+    });
+  });
+}
 
 const PORT = 3000;
 
@@ -50,6 +71,17 @@ app.get('/api/file/:id/:type', (req, res) => {
 // ── Config ─────────────────────────────────────────────────────────────────
 app.get('/api/config', (req, res) => {
   res.json({ libraryPath: provider.libraryPath });
+});
+
+// Open the native folder-picker dialog on the server and return the chosen path.
+app.get('/api/config/pick-folder', async (req, res) => {
+  try {
+    const selected = await pickFolderDialog();
+    if (!selected) return res.json({ cancelled: true });
+    res.json({ path: selected });
+  } catch (e) {
+    res.status(500).json({ error: `无法打开文件夹选择器：${e.message}` });
+  }
 });
 
 app.post('/api/config/library', (req, res) => {
