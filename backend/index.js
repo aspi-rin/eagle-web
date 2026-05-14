@@ -104,6 +104,13 @@ app.post('/api/config/library', (req, res) => {
   res.json({ ok: true, libraryPath });
 });
 
+// ── Frontend static files (Docker / production) ────────────────────────────
+const STATIC_DIR = path.join(__dirname, '../frontend/dist');
+if (fs.existsSync(STATIC_DIR)) {
+  app.use(express.static(STATIC_DIR));
+  app.get('*', (_req, res) => res.sendFile(path.join(STATIC_DIR, 'index.html')));
+}
+
 // ── Start ──────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Eagle viewer running on http://0.0.0.0:${PORT}`);

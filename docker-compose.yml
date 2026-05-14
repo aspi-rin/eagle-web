@@ -1,0 +1,10 @@
+services:
+  eagle-web:
+    build: .
+    ports:
+      - "13003:3000"
+    volumes:
+      - ${EAGLE_LIBRARY_PATH}:${EAGLE_LIBRARY_PATH}:ro
+    environment:
+      EAGLE_LIBRARY: ${EAGLE_LIBRARY_PATH}
+    restart: unless-stopped

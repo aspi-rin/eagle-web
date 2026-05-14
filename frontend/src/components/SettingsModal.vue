@@ -37,20 +37,32 @@
 
           <!-- Selected path preview -->
           <span
-            v-if="selectedPath"
+            v-if="selectedPath && !manualEditing"
             class="text-sm text-gray-300 font-mono truncate flex-1"
             :title="selectedPath"
           >
             {{ selectedPath }}
           </span>
-          <span v-else class="text-xs text-gray-600">尚未选择</span>
+          <span v-else-if="!manualEditing" class="text-xs text-gray-600">尚未选择</span>
+        </div>
+
+        <!-- Manual path input -->
+        <div class="mt-3">
+          <n-input
+            v-model:value="selectedPath"
+            placeholder="或直接粘贴路径，例如 /library 或 D:\Eagle.library"
+            size="small"
+            clearable
+            @focus="manualEditing = true"
+            @blur="manualEditing = false"
+          />
         </div>
 
         <div v-if="errorMsg" class="mt-2 text-xs text-red-400">{{ errorMsg }}</div>
 
         <div class="mt-3 text-xs text-gray-600 leading-relaxed">
-          在弹出的系统对话框中选择 Eagle 图库文件夹（即 <code class="text-gray-400">.library</code> 目录），
-          路径保存到 <code class="text-gray-400">backend/config.json</code>，重启后依然生效。
+          选择或粘贴 Eagle 图库文件夹路径（即 <code class="text-gray-400">.library</code> 目录）。
+          Docker 部署时填入容器内挂载路径（默认 <code class="text-gray-400">/library</code>）。
         </div>
       </div>
     </div>
@@ -73,7 +85,7 @@
 
 <script setup>
 import { ref, watch } from 'vue';
-import { NModal, NButton } from 'naive-ui';
+import { NModal, NButton, NInput } from 'naive-ui';
 import { getConfig, pickFolder, setLibraryPath } from '../api/index.js';
 
 const props = defineProps({
@@ -87,6 +99,7 @@ const selectedPath = ref('');
 const picking = ref(false);
 const saving = ref(false);
 const errorMsg = ref('');
+const manualEditing = ref(false);
 
 watch(
   () => props.show,
