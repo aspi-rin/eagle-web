@@ -28,25 +28,20 @@ export async function getConfig() {
   return res.json();
 }
 
-// Ask the backend to open a native folder-picker dialog on the server machine.
-// Returns the selected path string, or null if cancelled.
-export async function pickFolder() {
-  const res = await fetch(`${BASE}/config/pick-folder`);
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || 'Failed to open folder picker');
-  }
-  const data = await res.json();
-  return data.cancelled ? null : data.path;
+export async function getLibraries() {
+  const res = await fetch(`${BASE}/libraries`);
+  if (!res.ok) throw new Error('Failed to fetch libraries');
+  return res.json();
 }
 
-export async function setLibraryPath(libraryPath) {
+// Switch to a library by its path
+export async function selectLibrary(libraryPath) {
   const res = await fetch(`${BASE}/config/library`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ libraryPath }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to update library path');
+  if (!res.ok) throw new Error(data.error || 'Failed to switch library');
   return data;
 }

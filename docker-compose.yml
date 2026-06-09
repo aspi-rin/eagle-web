@@ -4,7 +4,9 @@ services:
     ports:
       - "13003:3000"
     volumes:
-      - ${EAGLE_LIBRARY_PATH}:${EAGLE_LIBRARY_PATH}:ro
+      - "${EAGLE_LIBRARY_1_PATH}:${EAGLE_LIBRARY_1_PATH}:ro"
+      - "${EAGLE_LIBRARY_2_PATH}:${EAGLE_LIBRARY_2_PATH}:ro"
+      - "${EAGLE_LIBRARY_3_PATH}:${EAGLE_LIBRARY_3_PATH}:ro"
     environment:
-      EAGLE_LIBRARY: ${EAGLE_LIBRARY_PATH}
+      LIBRARIES_JSON: '[{"name":"${EAGLE_LIBRARY_1_NAME:-Library 1}","path":"${EAGLE_LIBRARY_1_PATH}"},{"name":"${EAGLE_LIBRARY_2_NAME:-Library 2}","path":"${EAGLE_LIBRARY_2_PATH}"},{"name":"${EAGLE_LIBRARY_3_NAME:-Library 3}","path":"${EAGLE_LIBRARY_3_PATH}"}]'
     restart: unless-stopped

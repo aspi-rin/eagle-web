@@ -2,34 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
 const cfg = require('./config');
 const LocalProvider = require('./providers/local');
 
-// Open a native OS folder-picker dialog on the server machine.
-// Returns the selected path, or an empty string if cancelled.
-function pickFolderDialog() {
-  return new Promise((resolve, reject) => {
-    const cmd = [
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-      'Add-Type -AssemblyName System.Windows.Forms',
-      '$d = New-Object System.Windows.Forms.FolderBrowserDialog',
-      "$d.Description = 'Select Eagle Library Folder (.library)'",
-      "$d.ShowNewFolderButton = $false",
-      "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath }",
-    ].join('; ');
-
-    execFile('powershell', ['-NoProfile', '-Command', cmd], { encoding: 'buffer' }, (err, stdout) => {
-      if (err) return reject(new Error(err.message));
-      resolve(stdout.toString('utf8').trim());
-    });
-  });
-}
-
 const PORT = 3000;
 
-// Provider is re-created whenever the library path changes at runtime
-let provider = new LocalProvider(cfg.getLibraryPath());
+// Provider is re-created whenever the active library changes
+let provider = new LocalProvider(cfg.getActiveLibraryPath());
 
 const app = express();
 app.use(cors());
@@ -70,24 +49,33 @@ app.get('/api/file/:id/:type', (req, res) => {
 
 // ── Config ─────────────────────────────────────────────────────────────────
 app.get('/api/config', (req, res) => {
-  res.json({ libraryPath: provider.libraryPath });
+  const activeIdx = cfg.getLibraryIndex();
+  res.json({
+    libraries: cfg.getLibraries(),
+    activeLibraryIndex: activeIdx,
+    activeLibrary: { ...cfg.getLibraries()[activeIdx], index: activeIdx },
+  });
 });
 
-// Open the native folder-picker dialog on the server and return the chosen path.
-app.get('/api/config/pick-folder', async (req, res) => {
-  try {
-    const selected = await pickFolderDialog();
-    if (!selected) return res.json({ cancelled: true });
-    res.json({ path: selected });
-  } catch (e) {
-    res.status(500).json({ error: `无法打开文件夹选择器：${e.message}` });
-  }
+// List all available libraries (no side-effects)
+app.get('/api/libraries', (req, res) => {
+  res.json(cfg.getLibraries());
 });
 
+// Switch active library by path
 app.post('/api/config/library', (req, res) => {
   const { libraryPath } = req.body;
   if (!libraryPath || typeof libraryPath !== 'string') {
     return res.status(400).json({ error: 'libraryPath required' });
+  }
+
+  // Find the library by path
+  const libs = cfg.getLibraries();
+  const idx = libs.findIndex((l) => l.path === libraryPath);
+  if (idx === -1) {
+    return res.status(400).json({
+      error: '路径不在可用图库列表中，请通过 docker-compose 挂载新图库',
+    });
   }
 
   // Validate it looks like an Eagle library
@@ -98,10 +86,10 @@ app.post('/api/config/library', (req, res) => {
     });
   }
 
-  cfg.setLibraryPath(libraryPath);
-  provider = new LocalProvider(libraryPath); // swap provider, cache cleared automatically
-  console.log(`[config] library path updated → ${libraryPath}`);
-  res.json({ ok: true, libraryPath });
+  cfg.setActiveLibrary(idx);
+  provider = new LocalProvider(libraryPath);
+  console.log(`[config] switched to library [${idx}] → ${libraryPath}`);
+  res.json({ ok: true, libraryPath, index: idx, name: libs[idx].name });
 });
 
 // ── Frontend static files (Docker / production) ────────────────────────────
@@ -114,5 +102,6 @@ if (fs.existsSync(STATIC_DIR)) {
 // ── Start ──────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Eagle viewer running on http://0.0.0.0:${PORT}`);
-  console.log(`Library: ${cfg.getLibraryPath()}`);
+  console.log(`Available libraries: ${cfg.getLibraries().map(l => l.name).join(', ')}`);
+  console.log(`Active library: ${cfg.getActiveLibraryPath()}`);
 });
