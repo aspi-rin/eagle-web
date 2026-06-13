@@ -81,7 +81,7 @@
         <!-- Main content -->
         <n-layout-content style="background: #18181c; overflow: hidden; position: relative">
           <n-button
-            v-if="sidebarCollapsed"
+            v-if="sidebarCollapsed && !selectedFolder"
             class="sidebar-expand-button"
             circle
             secondary
@@ -100,7 +100,9 @@
             :folder-id="selectedFolder.id"
             :folder-name="selectedFolder.name"
             :include-subfolders="includeSubfolders"
+            :sidebar-collapsed="sidebarCollapsed"
             @update:include-subfolders="includeSubfolders = $event"
+            @expand-sidebar="setSidebarCollapsed(false)"
           />
           <div
             v-else

@@ -1,9 +1,26 @@
 <template>
   <div ref="outerRef" style="position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden">
     <!-- Header -->
-    <div class="flex items-center justify-between px-5 py-3 flex-shrink-0" style="border-bottom: 1px solid #2a2a35">
-      <h2 class="text-base font-semibold text-gray-200">{{ folderName }}</h2>
-      <div class="flex items-center gap-2 text-sm text-gray-400">
+    <div class="flex items-center justify-between gap-3 px-5 py-3 flex-shrink-0" style="border-bottom: 1px solid #2a2a35">
+      <div class="flex min-w-0 items-center gap-2">
+        <n-button
+          v-if="sidebarCollapsed"
+          circle
+          secondary
+          size="small"
+          aria-label="展开侧边栏"
+          class="flex-shrink-0"
+          @click="$emit('expandSidebar')"
+        >
+          <template #icon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </template>
+        </n-button>
+        <h2 class="truncate text-base font-semibold text-gray-200">{{ folderName }}</h2>
+      </div>
+      <div class="flex flex-shrink-0 items-center gap-2 text-sm text-gray-400">
         <span>包含子文件夹</span>
         <n-switch
           :value="includeSubfolders"
@@ -51,7 +68,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { NSpin, NSwitch } from 'naive-ui';
+import { NButton, NSpin, NSwitch } from 'naive-ui';
 import PhotoSwipe from 'photoswipe';
 import 'photoswipe/style.css';
 import { getImages, deleteImage, thumbnailUrl, originalUrl } from '../api/index.js';
@@ -65,9 +82,10 @@ const props = defineProps({
   folderId: { type: String, default: null },
   folderName: { type: String, default: '' },
   includeSubfolders: { type: Boolean, default: false },
+  sidebarCollapsed: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['update:includeSubfolders']);
+const emit = defineEmits(['update:includeSubfolders', 'expandSidebar']);
 
 const images = ref([]);
 const loading = ref(false);
