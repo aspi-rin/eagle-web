@@ -54,7 +54,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { NSpin, NSwitch } from 'naive-ui';
 import PhotoSwipe from 'photoswipe';
 import 'photoswipe/style.css';
-import { getImages, thumbnailUrl, originalUrl } from '../api/index.js';
+import { getImages, deleteImage, thumbnailUrl, originalUrl } from '../api/index.js';
 
 const COLUMN_WIDTH = 220;
 const GAP = 8;
@@ -76,6 +76,9 @@ const scrollRef = ref(null);
 const containerWidth = ref(0);
 const viewportHeight = ref(0);
 const scrollTop = ref(0);
+let activeGallery = null;
+let touchStart = null;
+let deletingId = null;
 
 function measureScroll() {
   if (!scrollRef.value) return;
@@ -126,7 +129,10 @@ onMounted(() => {
   if (scrollRef.value) ro.observe(scrollRef.value);
 });
 
-onUnmounted(() => ro?.disconnect());
+onUnmounted(() => {
+  ro?.disconnect();
+  activeGallery?.close();
+});
 
 async function loadImages() {
   if (!props.folderId) return;
@@ -153,9 +159,80 @@ function openGallery(startIndex) {
     index: startIndex,
     showHideAnimationType: 'zoom',
     bgOpacity: 0.92,
-    closeOnVerticalDrag: true,
+    closeOnVerticalDrag: false,
+  });
+
+  pswp.on('afterInit', () => {
+    activeGallery = pswp;
+    window.addEventListener('keydown', onGalleryKeydown);
+    window.addEventListener('touchstart', onGalleryTouchStart, { passive: true });
+    window.addEventListener('touchend', onGalleryTouchEnd, { passive: true });
+  });
+
+  pswp.on('destroy', () => {
+    if (activeGallery === pswp) activeGallery = null;
+    window.removeEventListener('keydown', onGalleryKeydown);
+    window.removeEventListener('touchstart', onGalleryTouchStart);
+    window.removeEventListener('touchend', onGalleryTouchEnd);
+    touchStart = null;
   });
 
   pswp.init();
+}
+
+function onGalleryKeydown(e) {
+  if (e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  requestDeleteCurrentImage();
+}
+
+function onGalleryTouchStart(e) {
+  const touch = e.changedTouches?.[0];
+  if (!touch) return;
+  touchStart = { x: touch.clientX, y: touch.clientY };
+}
+
+function onGalleryTouchEnd(e) {
+  if (!touchStart) return;
+  const touch = e.changedTouches?.[0];
+  if (!touch) return;
+  const dx = touch.clientX - touchStart.x;
+  const dy = touch.clientY - touchStart.y;
+  touchStart = null;
+
+  // Up swipe: enough vertical travel, mostly vertical, and upward direction.
+  if (dy < -80 && Math.abs(dy) > Math.abs(dx) * 1.4) {
+    requestDeleteCurrentImage();
+  }
+}
+
+async function requestDeleteCurrentImage() {
+  if (!activeGallery || deletingId) return;
+
+  const index = activeGallery.currIndex;
+  const img = images.value[index];
+  if (!img) return;
+
+  const confirmed = window.confirm(`确定要删除「${img.name || img.id}」吗？\n\n会将 metadata.json 的 folders 置空，并标记 deleted=true。`);
+  if (!confirmed) return;
+
+  deletingId = img.id;
+  try {
+    await deleteImage(img.id);
+    const nextIndex = Math.min(index, images.value.length - 2);
+    images.value = images.value.filter((item) => item.id !== img.id);
+
+    const gallery = activeGallery;
+    if (nextIndex >= 0) {
+      gallery.on('destroy', () => {
+        nextTick().then(() => openGallery(nextIndex));
+      });
+    }
+    gallery.close();
+  } catch (err) {
+    window.alert(err?.message || '删除失败');
+  } finally {
+    deletingId = null;
+  }
 }
 </script>

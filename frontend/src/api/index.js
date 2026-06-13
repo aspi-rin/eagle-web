@@ -14,6 +14,15 @@ export async function getImages(folderId, includeSubfolders = false) {
   return res.json();
 }
 
+export async function deleteImage(id) {
+  const res = await fetch(`${BASE}/images/${encodeURIComponent(id)}/delete`, {
+    method: 'POST',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to delete image');
+  return data;
+}
+
 export function thumbnailUrl(id) {
   return `${BASE}/file/${id}/thumbnail`;
 }

@@ -47,6 +47,17 @@ app.get('/api/file/:id/:type', (req, res) => {
   }
 });
 
+// ── Soft delete image ──────────────────────────────────────────────────────
+app.post('/api/images/:id/delete', (req, res) => {
+  const { id } = req.params;
+  try {
+    res.json(provider.deleteImage(id));
+  } catch (e) {
+    const status = e.code === 'ENOENT' ? 404 : 400;
+    res.status(status).json({ error: e.message || 'Failed to delete image' });
+  }
+});
+
 // ── Config ─────────────────────────────────────────────────────────────────
 app.get('/api/config', (req, res) => {
   const activeIdx = cfg.getLibraryIndex();
