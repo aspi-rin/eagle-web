@@ -3,68 +3,57 @@
     :show="show"
     preset="card"
     title="图库设置"
-    style="width: 480px"
+    style="width: 520px"
     :mask-closable="false"
     @update:show="$emit('update:show', $event)"
   >
     <div class="flex flex-col gap-5">
-      <!-- Current library path -->
+      <!-- Current library -->
       <div>
         <div class="text-xs text-gray-500 mb-1">当前图库</div>
         <div class="text-sm text-gray-300 font-mono bg-gray-800 rounded px-3 py-2 break-all leading-relaxed">
-          {{ currentPath || '（未设置）' }}
+          {{ activeLibraryName || '（未设置）' }}
+        </div>
+        <div
+          v-if="activeLibraryPath"
+          class="text-xs text-gray-600 mt-1 font-mono truncate"
+          :title="activeLibraryPath"
+        >
+          {{ activeLibraryPath }}
         </div>
       </div>
 
-      <!-- Folder picker -->
+      <!-- Library selector -->
       <div>
-        <div class="text-xs text-gray-500 mb-2">选择新图库</div>
+        <div class="text-xs text-gray-500 mb-2">切换图库</div>
 
-        <div class="flex items-center gap-3">
-          <n-button
-            :loading="picking"
-            :disabled="saving"
-            @click="browse"
-          >
-            <template #icon>
-              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              </svg>
-            </template>
-            浏览文件夹…
-          </n-button>
-
-          <!-- Selected path preview -->
-          <span
-            v-if="selectedPath"
-            class="text-sm text-gray-300 font-mono truncate flex-1"
-            :title="selectedPath"
-          >
-            {{ selectedPath }}
-          </span>
-          <span v-else class="text-xs text-gray-600">尚未选择</span>
-        </div>
+        <n-select
+          v-model:value="selectedPath"
+          :options="libraryOptions"
+          placeholder="选择一个图库…"
+          :loading="loadingLibraries"
+          style="width: 100%"
+        />
 
         <div v-if="errorMsg" class="mt-2 text-xs text-red-400">{{ errorMsg }}</div>
 
         <div class="mt-3 text-xs text-gray-600 leading-relaxed">
-          在弹出的系统对话框中选择 Eagle 图库文件夹（即 <code class="text-gray-400">.library</code> 目录），
-          路径保存到 <code class="text-gray-400">backend/config.json</code>，重启后依然生效。
+          从已挂载的 Eagle 图库中选择一个。
+          如需添加新图库，请在 <code class="text-gray-400">docker-compose.yml</code> 中挂载新路径并重启服务。
         </div>
       </div>
     </div>
 
     <template #footer>
       <div class="flex justify-end gap-2">
-        <n-button :disabled="saving || picking" @click="$emit('update:show', false)">取消</n-button>
+        <n-button :disabled="saving || loadingLibraries" @click="$emit('update:show', false)">取消</n-button>
         <n-button
           type="primary"
           :loading="saving"
-          :disabled="!selectedPath || picking"
+          :disabled="!selectedPath || selectedPath === activeLibraryPath"
           @click="save"
         >
-          应用
+          切换
         </n-button>
       </div>
     </template>
@@ -72,9 +61,9 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
-import { NModal, NButton } from 'naive-ui';
-import { getConfig, pickFolder, setLibraryPath } from '../api/index.js';
+import { ref, watch, computed } from 'vue';
+import { NModal, NButton, NSelect } from 'naive-ui';
+import { getConfig, getLibraries, selectLibrary } from '../api/index.js';
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -82,48 +71,52 @@ const props = defineProps({
 
 const emit = defineEmits(['update:show', 'changed']);
 
-const currentPath = ref('');
-const selectedPath = ref('');
-const picking = ref(false);
+const libraries = ref([]);
+const activeLibraryPath = ref('');
+const activeLibraryName = ref('');
+const selectedPath = ref(null);
 const saving = ref(false);
+const loadingLibraries = ref(false);
 const errorMsg = ref('');
+
+const libraryOptions = computed(() =>
+  libraries.value.map((lib) => ({
+    label: `${lib.name}`,
+    value: lib.path,
+  }))
+);
 
 watch(
   () => props.show,
   async (visible) => {
     if (!visible) return;
-    selectedPath.value = '';
+    selectedPath.value = null;
     errorMsg.value = '';
+
     try {
-      const cfg = await getConfig();
-      currentPath.value = cfg.libraryPath;
+      loadingLibraries.value = true;
+      const [cfg, libs] = await Promise.all([getConfig(), getLibraries()]);
+      libraries.value = libs;
+
+      activeLibraryPath.value = cfg.activeLibrary?.path || '';
+      activeLibraryName.value = cfg.activeLibrary?.name || '';
     } catch {
-      currentPath.value = '（获取失败）';
+      errorMsg.value = '无法加载图库列表';
+    } finally {
+      loadingLibraries.value = false;
     }
   }
 );
-
-async function browse() {
-  picking.value = true;
-  errorMsg.value = '';
-  try {
-    const p = await pickFolder();
-    if (p) selectedPath.value = p;
-  } catch (e) {
-    errorMsg.value = e.message;
-  } finally {
-    picking.value = false;
-  }
-}
 
 async function save() {
   if (!selectedPath.value) return;
   saving.value = true;
   errorMsg.value = '';
   try {
-    await setLibraryPath(selectedPath.value);
-    currentPath.value = selectedPath.value;
-    emit('changed', selectedPath.value);
+    const result = await selectLibrary(selectedPath.value);
+    activeLibraryPath.value = result.libraryPath;
+    activeLibraryName.value = result.name;
+    emit('changed', result.libraryPath);
     emit('update:show', false);
   } catch (e) {
     errorMsg.value = e.message;

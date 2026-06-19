@@ -1,0 +1,9 @@
+**/.git
+**/.gitignore
+**/node_modules
+**/dist
+**/.env
+**/*.local
+backend/config.json
+docker-compose.yml
+.dockerignore

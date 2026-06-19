@@ -8,19 +8,38 @@ Eagle Web Viewer — a local web viewer for [Eagle](https://eagle.cool/) image l
 
 ## Development
 
+### Local (dev mode)
+
 Two separate processes must run concurrently:
 
 ```bash
 # Backend (Express, port 3000) — from /backend
 npm run dev        # uses node --watch for auto-reload
-npm start          # production, no auto-reload
 
 # Frontend (Vite dev server, port 5173) — from /frontend
 npm run dev
-npm run build      # output to /frontend/dist
 ```
 
 Vite proxies `/api/*` to `http://localhost:3000`, so both servers must be running for the UI to work.
+
+Copy `.env.example` to `backend/.env` and set `EAGLE_LIBRARY` to your local Eagle library path.
+
+### Docker (production mode)
+
+A single container runs both the backend and the pre-built frontend static files.
+
+```bash
+# 1. Create a .env file in the project root
+echo "EAGLE_LIBRARY_PATH=/path/to/your/Eagle.library" > .env
+
+# 2. Build and start
+docker compose up --build
+
+# 3. Open in browser
+open http://localhost:13003
+```
+
+The host path is mounted at the **same path** inside the container, so the path shown in the web UI matches the actual host filesystem path exactly. To switch libraries at runtime, update the path via Settings in the UI (the new path must be within the already-mounted directory). To mount a different root entirely, update `.env` and restart.
 
 ## Architecture
 
@@ -33,7 +52,7 @@ Vite proxies `/api/*` to `http://localhost:3000`, so both servers must be runnin
   - `<library>/images/<id>.info/<name>.<ext>` — original file.
   - `<library>/images/<id>.info/<name>_thumbnail.png` — thumbnail.
 
-The library path is hardcoded in `backend/index.js` as `LIBRARY_PATH`. Change this constant to point to a different Eagle library.
+The library path is read from `backend/config.js`: first from `backend/config.json` (persisted via the web UI), then from the `EAGLE_LIBRARY` env var, then a hardcoded default.
 
 ### Frontend (`/frontend/src`)
 

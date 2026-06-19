@@ -25,7 +25,7 @@ class LocalProvider {
         const meta = JSON.parse(
           fs.readFileSync(path.join(this.imagesDir, dir, 'metadata.json'), 'utf-8')
         );
-        if (!meta.isDeleted) {
+        if (!meta.deleted && !meta.isDeleted) {
           this._allImages.push({
             id: meta.id,
             name: meta.name,
@@ -80,6 +80,27 @@ class LocalProvider {
   getMeta(id) {
     const metaPath = path.join(this.imagesDir, `${id}.info`, 'metadata.json');
     return JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+  }
+
+  deleteImage(id) {
+    if (!id || /[\\/]/.test(id)) {
+      throw new Error('Invalid image id');
+    }
+
+    const metaPath = path.join(this.imagesDir, `${id}.info`, 'metadata.json');
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    meta.folders = [];
+    meta.deleted = true;
+    // Some existing Eagle metadata uses isDeleted in readers/exporters. Keep both
+    // flags in sync while preserving every other metadata field untouched.
+    meta.isDeleted = true;
+    fs.writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`, 'utf-8');
+
+    if (this._allImages) {
+      this._allImages = this._allImages.filter((img) => img.id !== id);
+    }
+
+    return { id, deleted: true };
   }
 
   pipeFile(id, type, res) {

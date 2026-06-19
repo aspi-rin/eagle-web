@@ -1,0 +1,12 @@
+services:
+  eagle-web:
+    build: .
+    ports:
+      - "13003:3000"
+    volumes:
+      - "${EAGLE_LIBRARY_1_PATH}:${EAGLE_LIBRARY_1_PATH}:rw"
+      - "${EAGLE_LIBRARY_2_PATH}:${EAGLE_LIBRARY_2_PATH}:rw"
+      - "${EAGLE_LIBRARY_3_PATH}:${EAGLE_LIBRARY_3_PATH}:rw"
+    environment:
+      LIBRARIES_JSON: '[{"name":"${EAGLE_LIBRARY_1_NAME:-Library 1}","path":"${EAGLE_LIBRARY_1_PATH}"},{"name":"${EAGLE_LIBRARY_2_NAME:-Library 2}","path":"${EAGLE_LIBRARY_2_PATH}"},{"name":"${EAGLE_LIBRARY_3_NAME:-Library 3}","path":"${EAGLE_LIBRARY_3_PATH}"}]'
+    restart: unless-stopped

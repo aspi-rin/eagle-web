@@ -1,9 +1,26 @@
 <template>
   <div ref="outerRef" style="position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden">
     <!-- Header -->
-    <div class="flex items-center justify-between px-5 py-3 flex-shrink-0" style="border-bottom: 1px solid #2a2a35">
-      <h2 class="text-base font-semibold text-gray-200">{{ folderName }}</h2>
-      <div class="flex items-center gap-2 text-sm text-gray-400">
+    <div class="flex items-center justify-between gap-3 px-5 py-3 flex-shrink-0" style="border-bottom: 1px solid #2a2a35">
+      <div class="flex min-w-0 items-center gap-2">
+        <n-button
+          v-if="sidebarCollapsed"
+          circle
+          secondary
+          size="small"
+          aria-label="展开侧边栏"
+          class="flex-shrink-0"
+          @click="$emit('expandSidebar')"
+        >
+          <template #icon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </template>
+        </n-button>
+        <h2 class="truncate text-base font-semibold text-gray-200">{{ folderName }}</h2>
+      </div>
+      <div class="flex flex-shrink-0 items-center gap-2 text-sm text-gray-400">
         <span>包含子文件夹</span>
         <n-switch
           :value="includeSubfolders"
@@ -51,10 +68,10 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { NSpin, NSwitch } from 'naive-ui';
+import { NButton, NSpin, NSwitch } from 'naive-ui';
 import PhotoSwipe from 'photoswipe';
 import 'photoswipe/style.css';
-import { getImages, thumbnailUrl, originalUrl } from '../api/index.js';
+import { getImages, deleteImage, thumbnailUrl, originalUrl } from '../api/index.js';
 
 const COLUMN_WIDTH = 220;
 const GAP = 8;
@@ -65,9 +82,10 @@ const props = defineProps({
   folderId: { type: String, default: null },
   folderName: { type: String, default: '' },
   includeSubfolders: { type: Boolean, default: false },
+  sidebarCollapsed: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['update:includeSubfolders']);
+const emit = defineEmits(['update:includeSubfolders', 'expandSidebar']);
 
 const images = ref([]);
 const loading = ref(false);
@@ -76,6 +94,9 @@ const scrollRef = ref(null);
 const containerWidth = ref(0);
 const viewportHeight = ref(0);
 const scrollTop = ref(0);
+let activeGallery = null;
+let touchStart = null;
+let deletingId = null;
 
 function measureScroll() {
   if (!scrollRef.value) return;
@@ -126,7 +147,10 @@ onMounted(() => {
   if (scrollRef.value) ro.observe(scrollRef.value);
 });
 
-onUnmounted(() => ro?.disconnect());
+onUnmounted(() => {
+  ro?.disconnect();
+  activeGallery?.close();
+});
 
 async function loadImages() {
   if (!props.folderId) return;
@@ -153,9 +177,80 @@ function openGallery(startIndex) {
     index: startIndex,
     showHideAnimationType: 'zoom',
     bgOpacity: 0.92,
-    closeOnVerticalDrag: true,
+    closeOnVerticalDrag: false,
+  });
+
+  pswp.on('afterInit', () => {
+    activeGallery = pswp;
+    window.addEventListener('keydown', onGalleryKeydown);
+    window.addEventListener('touchstart', onGalleryTouchStart, { passive: true });
+    window.addEventListener('touchend', onGalleryTouchEnd, { passive: true });
+  });
+
+  pswp.on('destroy', () => {
+    if (activeGallery === pswp) activeGallery = null;
+    window.removeEventListener('keydown', onGalleryKeydown);
+    window.removeEventListener('touchstart', onGalleryTouchStart);
+    window.removeEventListener('touchend', onGalleryTouchEnd);
+    touchStart = null;
   });
 
   pswp.init();
+}
+
+function onGalleryKeydown(e) {
+  if (e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  requestDeleteCurrentImage();
+}
+
+function onGalleryTouchStart(e) {
+  const touch = e.changedTouches?.[0];
+  if (!touch) return;
+  touchStart = { x: touch.clientX, y: touch.clientY };
+}
+
+function onGalleryTouchEnd(e) {
+  if (!touchStart) return;
+  const touch = e.changedTouches?.[0];
+  if (!touch) return;
+  const dx = touch.clientX - touchStart.x;
+  const dy = touch.clientY - touchStart.y;
+  touchStart = null;
+
+  // Up swipe: enough vertical travel, mostly vertical, and upward direction.
+  if (dy < -80 && Math.abs(dy) > Math.abs(dx) * 1.4) {
+    requestDeleteCurrentImage();
+  }
+}
+
+async function requestDeleteCurrentImage() {
+  if (!activeGallery || deletingId) return;
+
+  const index = activeGallery.currIndex;
+  const img = images.value[index];
+  if (!img) return;
+
+  const confirmed = window.confirm(`确定要删除「${img.name || img.id}」吗？\n\n会将 metadata.json 的 folders 置空，并标记 deleted=true。`);
+  if (!confirmed) return;
+
+  deletingId = img.id;
+  try {
+    await deleteImage(img.id);
+    const nextIndex = Math.min(index, images.value.length - 2);
+    images.value = images.value.filter((item) => item.id !== img.id);
+
+    const gallery = activeGallery;
+    if (nextIndex >= 0) {
+      gallery.on('destroy', () => {
+        nextTick().then(() => openGallery(nextIndex));
+      });
+    }
+    gallery.close();
+  } catch (err) {
+    window.alert(err?.message || '删除失败');
+  } finally {
+    deletingId = null;
+  }
 }
 </script>
